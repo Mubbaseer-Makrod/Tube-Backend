@@ -153,7 +153,8 @@ const loginUser = asyncHandler(async (req, res) => {
         secure: true
     }
     
-    res.status(200)
+    res
+    .status(200)
     .cookie("accessToken",accessToken, options)
     .cookie("refreshToken",refreshToken, options)
     .json( new ApiResponse(
@@ -180,14 +181,22 @@ const logoutUser = asyncHandler(async (req, res) => {
         throw new ApiError(401, "user not available in request")
     }
 
-    const user = await User.findById(req.user._id)
+    // const user = User.findByIdAndUpdate(req.user._id, update, options)
+
+    const user = await User.findByIdAndUpdate(req.user?._id, 
+        {
+            $unset: {
+                refreshToken: 1,
+            }
+        },
+        {
+            new: true
+        }
+    )
+
     if(!user) {
         throw new ApiError(401, "User not available")
     }
-
-    user.accessToken = ""
-    user.refreshToken = ""
-    user.save({validateBeforeSave: false})
 
     const options = {
         httpOnly: true,
@@ -197,7 +206,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     res.status(200)
     .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
-    .json(new ApiError(
+    .json(new ApiResponse(
         200,
         {},
         "User succesfully loggedout"
