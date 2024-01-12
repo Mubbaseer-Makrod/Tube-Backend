@@ -5,8 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import {ApiResponse} from "../utils/ApiResponce.js"
 import Jwt from "jsonwebtoken";
 
-/*
-problem: Generate Access Token and Refresh Token
+/* problem: Generate Access Token and Refresh Token
 solve:
 1. search database with id and fetch user
 2. call accesstoken and refresh token methode and save in variable
@@ -31,8 +30,7 @@ const generateAccessTokenAndRefreshToken = async function(userId) {
     }
 }
 
-/* 
-problem: register user
+/* problem: register user 
 
 steps:
 1. Take input from user(front-end) (2 data - json and image)
@@ -110,9 +108,8 @@ const registerUser = asyncHandler(async (req, res) => {
     )
 })
 
-/* 
+/* problem: User Login
 
-problem: User Login
 1. Fetch data email or username from frontend
 2. validate the data(not empty correct format)
 
@@ -169,8 +166,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
 })
 
-/*
-logout user 
+/* logout user 
 steps: 
 1. fetch user id from req.user (given by middleware)
 2. call dbquery find user 
@@ -265,4 +261,55 @@ const refreshAcessToken = asyncHandler(async (req,res) => {
     }
 })
 
-export {registerUser, loginUser, logoutUser, refreshAcessToken}
+/* problem: Change User Password
+steps: (req has user, oldPassword and newPassword)
+1. fetch user from req (user included in req from auth middleware)
+2. get user id and call database to find user
+3. call isPasswordverified methode to verify current password is correct.
+4. update the password
+5. return success to user 
+*/
+
+const changeCurrentPassword = asyncHandler(async (req,res) => {
+    const {oldPassword, newPassword} = req.body
+
+    const user = await User.findById(req?.user?._id)
+    if(!user) {
+        throw new ApiError(404, "User not Found")
+    }
+
+    const isPasswordValid = await user.isPasswordCorrect(oldPassword)
+    if(!isPasswordValid) {
+        throw new ApiError(400, "Invalid Password")
+    }
+
+    user.password = newPassword
+
+    await user.save({ validateBeforeSave: false })
+
+    return res
+    .status(200)
+    .json(new ApiResponse(
+        200,
+        {},
+        "Password Change Successfully"
+    ))
+
+})
+
+/* Problem: Get Current User
+steps:
+1. fetch user from res (from auth middleware) and send it to response
+*/
+
+const getCurrentUser = asyncHandler(async(req, res) => {
+    res
+    .status(200)
+    .json(new ApiResponse(
+        200,
+        req.user,
+        "Current user fetched Successfully"
+    ))
+})
+
+export {registerUser, loginUser, logoutUser, refreshAcessToken, changeCurrentPassword, getCurrentUser}
