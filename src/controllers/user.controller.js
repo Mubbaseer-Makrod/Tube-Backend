@@ -219,11 +219,10 @@ const logoutUser = asyncHandler(async (req, res) => {
 steps:
 1. fetch access and refresh cookie from user
 2. verify access token 
-3. verify refresh token (if success do below)
-4. decode the refresh token and fetch _id
-5. generate access and refreshtoken 
-6. save refresh token to database
-7. give both to user
+3. decode the refresh token and fetch _id
+4. generate access and refreshtoken 
+5. save refresh token to database
+6. give both to user
 */
 const refreshAcessToken = asyncHandler(async (req,res) => {
     const incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken
