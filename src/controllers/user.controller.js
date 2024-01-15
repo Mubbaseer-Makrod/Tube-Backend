@@ -238,7 +238,7 @@ const refreshAcessToken = asyncHandler(async (req,res) => {
         }
     
         const {accessToken, refreshToken} = await generateAccessTokenAndRefreshToken(user._id)
-        console.log(`Access T: ${accessToken} , Ref T: ${refreshToken}`);
+        // console.log(`Access T: ${accessToken} , Ref T: ${refreshToken}`);
         const options = {
             httpOnly: true,
             secure: true
@@ -312,4 +312,104 @@ const getCurrentUser = asyncHandler(async(req, res) => {
     ))
 })
 
-export {registerUser, loginUser, logoutUser, refreshAcessToken, changeCurrentPassword, getCurrentUser}
+/* problem: Update account details
+1: fetch email and full name from req
+2: fetch _id from req.user (user is added by auth middleware)
+3: call data and update username and email (remove password field)
+4: send respond
+*/
+
+const updateAccountInfo = asyncHandler(async (req, res) => {
+    const {username, email} = req.body
+    if(!username || !email) {
+        throw new ApiError(404, "All Field require")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id, 
+        {
+            $set: {
+                username,
+                email
+            }
+        },
+        { new: true }
+    ).select("-password")
+
+    if(!user) {
+        throw new ApiError(404, "Account not available in database")
+    }
+
+    res
+    .status(200)
+    .json(new ApiResponse(200, user, "Account detail updated successfully"))
+})
+
+/* Problem: Update user Avatar
+step 1: fetch local file path from req
+2: fetch user from database
+3: update the database
+*/ 
+
+const updateUserAvatar = asyncHandler(async (req, res) => {
+    const avatarLocalPath = req?.file?.path
+    if(!avatarLocalPath) {
+        throw new ApiError(400, "Avatar file is missing")
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    if(!avatar.url) {
+        throw new ApiError(400, "Failed to upload avatar on cloudinary")
+    }
+
+    const user = await User.findByIdAndUpdate(req.user?._id,
+        {
+            $set: {
+                "avatar": avatar.url
+            }
+        },
+        {new: true}
+    ).select("-password")
+
+    if(!user) {
+        throw new ApiError(400, "Avatar cloudinary Url not saved in database")
+    }
+
+    res
+    .status(200)
+    .json(new ApiResponse(200, user, "Successfull updated Avatar"))
+})
+
+/* (update coverimage)Same as Update avatar */
+
+const updateCoverImage = asyncHandler(async (req, res) => {
+    const coverImageLocalPath = req?.file?.path
+    if(!coverImageLocalPath) {
+        throw new ApiError(400, "CoverImage file missing")
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+    if(!coverImage?.url) {
+        throw new ApiError(400, "Failed to upload cover image on cloudinary")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                "coverImage" : coverImage.url
+            }
+        },
+        {new: true}
+    ).select("-password")
+
+    if (!user) {
+        throw new ApiError(400, "coverimage cloudinary Url not saved in database")
+    }
+
+    res
+    .status(200)
+    .json(200, user, "Cover Image Updated Successfully")
+})
+
+export {registerUser, loginUser, logoutUser, refreshAcessToken, changeCurrentPassword, getCurrentUser, updateAccountInfo, updateUserAvatar, updateCoverImage}
