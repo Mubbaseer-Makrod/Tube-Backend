@@ -303,6 +303,10 @@ steps:
 */
 
 const getCurrentUser = asyncHandler(async(req, res) => {
+
+    if(!req?.user) {
+        throw new ApiError(400, "Failed to fetch user from the request")
+    }
     res
     .status(200)
     .json(new ApiResponse(
@@ -340,7 +344,7 @@ const updateAccountInfo = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Account not available in database")
     }
 
-    res
+    return res
     .status(200)
     .json(new ApiResponse(200, user, "Account detail updated successfully"))
 })
@@ -375,7 +379,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Avatar cloudinary Url not saved in database")
     }
 
-    res
+    return res
     .status(200)
     .json(new ApiResponse(200, user, "Successfull updated Avatar"))
 })
@@ -407,9 +411,140 @@ const updateCoverImage = asyncHandler(async (req, res) => {
         throw new ApiError(400, "coverimage cloudinary Url not saved in database")
     }
 
-    res
+    return res
     .status(200)
     .json(200, user, "Cover Image Updated Successfully")
 })
 
-export {registerUser, loginUser, logoutUser, refreshAcessToken, changeCurrentPassword, getCurrentUser, updateAccountInfo, updateUserAvatar, updateCoverImage}
+/* Get User Channel Profile
+1: 
+ */
+
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const {username} = req?.params
+
+    if(!username?.trim()) {
+        throw new ApiError(404, "Failed to give user name")
+    }
+
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
+            }
+        },
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: "$subscribers"
+                },
+                channelSubscriptionCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                fullName: 1,
+                username: 1,
+                email: 1,
+                avatar: 1,
+                coverImage: 1,
+                subscribersCount: 1,
+                channelSubscriptionCount: 1,
+                isSubscribed: 1,
+            }
+        }
+    ])
+
+    if(!channel?.length) {
+        throw new ApiError(400, "Failed to fetch channel from database")
+    }
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, channel[0], "Successfully fetched channel data"))
+})
+
+/* problem: get watch History
+1. fetch user from req
+2. use aggregate pipeline (becouse in user watch history is array with video_id)
+3. in aggregate pipeline
+  1. match the user from req
+  2. lookup from user watchistory to video by _id
+  3. create nested lookup (becouse owner need to replaced with user details)
+  4. send owner[0] element
+*/
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectID(req.user?._id)
+            }
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                      $lookup: {
+                        from: "users",
+                        localField: "owner",
+                        foreignField: "_id",
+                        as: "owner",
+                        pipeline: [
+                            {
+                                $project: {
+                                    fullName: 1,
+                                    username: 1,
+                                    avatar: 1
+                                }
+                            }
+                        ]
+                      }  
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first: "$owner"
+                            }
+                        }
+                    }
+                ]
+            },
+        }
+    ])
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, user[0].watchHistory, "Watch History fetched Succesfully"))
+})
+
+export {registerUser, loginUser, logoutUser, refreshAcessToken, changeCurrentPassword, getCurrentUser, updateAccountInfo, updateUserAvatar, updateCoverImage, getUserChannelProfile}
