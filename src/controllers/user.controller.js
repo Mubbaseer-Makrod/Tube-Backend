@@ -1,7 +1,7 @@
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { destroyOnCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import {ApiResponse} from "../utils/ApiResponce.js"
 import Jwt from "jsonwebtoken";
 
@@ -356,7 +356,9 @@ step 1: fetch local file path from req
 */ 
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
+    const oldAvatarUrl = req?.user?.avatar
     const avatarLocalPath = req?.file?.path
+
     if(!avatarLocalPath) {
         throw new ApiError(400, "Avatar file is missing")
     }
@@ -379,6 +381,9 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Avatar cloudinary Url not saved in database")
     }
 
+    // deleting the old avatar
+    await destroyOnCloudinary(oldAvatarUrl)
+    
     return res
     .status(200)
     .json(new ApiResponse(200, user, "Successfull updated Avatar"))
@@ -387,6 +392,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 /* (update coverimage)Same as Update avatar */
 
 const updateCoverImage = asyncHandler(async (req, res) => {
+    const oldCoverImageUrl = req?.user?.coverImage
     const coverImageLocalPath = req?.file?.path
     if(!coverImageLocalPath) {
         throw new ApiError(400, "CoverImage file missing")
@@ -411,9 +417,12 @@ const updateCoverImage = asyncHandler(async (req, res) => {
         throw new ApiError(400, "coverimage cloudinary Url not saved in database")
     }
 
+    // deleting the old cover image
+    await destroyOnCloudinary(oldCoverImageUrl)
+
     return res
     .status(200)
-    .json(200, user, "Cover Image Updated Successfully")
+    .json(new ApiResponse(200, user, "Cover Image Updated Successfully"))
 })
 
 /* Get User Channel Profile
@@ -547,4 +556,4 @@ const getWatchHistory = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user[0].watchHistory, "Watch History fetched Succesfully"))
 })
 
-export {registerUser, loginUser, logoutUser, refreshAcessToken, changeCurrentPassword, getCurrentUser, updateAccountInfo, updateUserAvatar, updateCoverImage, getUserChannelProfile}
+export {registerUser, loginUser, logoutUser, refreshAcessToken, changeCurrentPassword, getCurrentUser, updateAccountInfo, updateUserAvatar, updateCoverImage, getUserChannelProfile, getWatchHistory}
