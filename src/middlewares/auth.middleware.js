@@ -13,9 +13,8 @@ solution:
 4. return this user in req.user
 5. call next handler 
 */
-export const verifyjwt = asyncHandler(async (req, res, next) => {
+export const verifyJWT = asyncHandler(async (req, res, next) => {
     try {
-        console.log(req.cookies);
         const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ","")
         if(!token) {
             throw new ApiError(401, "Token not available in request")

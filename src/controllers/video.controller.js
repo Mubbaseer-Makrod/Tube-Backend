@@ -1,114 +1,134 @@
-import { User } from "../models/user.model.js";
-import { Video } from "../models/video.model.js";
-import { ApiError } from "../utils/ApiError.js";
-import { ApiResponse } from "../utils/ApiResponce.js";
-import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import mongoose, {isValidObjectId} from "mongoose"
+import {Video} from "../models/video.model.js"
+import {User} from "../models/user.model.js"
+import {ApiError} from "../utils/ApiError.js"
+import {ApiResponse} from "../utils/ApiResponse.js"
+import {asyncHandler} from "../utils/asyncHandler.js"
+import {uploadOnCloudinary} from "../utils/cloudinary.js"
 
 
-/* Problem: What type of controllers should be in video
-1. save video in controller.
-2. update info in video.
-3. isPublished info update.
+const getAllVideos = asyncHandler(async (req, res) => {
+    const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
+    //TODO: get all videos based on query, sort, pagination
+})
+
+const publishAVideo = asyncHandler(async (req, res) => {
+    try {
+        const { title, description } = req.body
+        let { isPublished } = req.body
+    
+        if(!req?.user) {
+            throw new ApiError(400, "User is not LoggedIN")
+        }
+        // TODO: get video, upload to cloudinary, create video
+        if(!(title && description)) {
+            throw new ApiError(400, "All Fields are required")
+        }
+    
+        // if published is not given putting default true init
+        if(!isPublished) {
+            isPublished = true
+        }
+    
+        const videoLocalPath = req?.files?.videoFile?.[0]?.path
+        const thumbnailLocalPath = req?.files?.thumbnail?.[0]?.path
+
+        if(!(videoLocalPath && thumbnailLocalPath)) {
+            throw new ApiError(400, "Video or Thumbnail is not Locally stored")
+        }
+    
+        const uploadedVideo = await uploadOnCloudinary(videoLocalPath)
+        const uploadedThumbnail = await uploadOnCloudinary(thumbnailLocalPath)
+    
+        if(!(uploadedVideo && uploadedThumbnail)) {
+            throw new ApiError(400, "Failed to upload on Cloudinary")
+        }
+
+        const video = await Video.create({
+            videoFile: uploadedVideo.url,
+            title,
+            description,
+            thumbnail: uploadedThumbnail.url,
+            owner: req?.user?._id,
+            duration: uploadedVideo.duration,
+            isPublished
+        })
+    
+        return res
+        .status(200)
+        .json(new ApiResponse(200, video, "Successfully uploaded video"))
+    } catch (error) {
+        throw new ApiError(400, `Error occour: ${error}`)
+    }
+})
+
+/* Problem: Get one video by Id in params
+steps 1: fetch videoId from params
+2: use aggregated pipeline (Becaouse we need owner data)
+3: return the video 
 */
-
-/* Problem: Save video
-1. fetch all json data from req
-2. fetch localpath of video from multer
-3. upload the video to cloudinary
-4. save the video to the database
-*/
-const registerVideo = asyncHandler(async (req, res) => {
-    if(!req.user) {
-        throw new ApiError(400, "User is not logIn")
+const getVideoById = asyncHandler(async (req, res) => {
+    const { videoId } = req.params
+    //TODO: get video by id
+    if (!videoId) {
+        throw new ApiError(400, "Video Id is not Provided in Url")
     }
+    const video = await Video.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(videoId)
+            },
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [
+                    {
+                        $project: {
+                            fullName: 1,
+                            username: 1,
+                            avatar: 1,
+                            coverImage: 1,
+                        }
+                    }
+                ]
+            }
+        }
+    ])
 
-    const { title, description, thumbnail, isPublished } = req.body
-    const owner = req.user._id
-
-    if([title, description, thumbnail].some((field) => !field ? true: false)) {
-        throw new ApiError(400, "All fields are required")
-    }
-
-    const videoLocalPath = req?.file?.path
-    if(!videoLocalPath) {
-        throw new ApiError(400, "No Local Path available for video")
-    }
-
-    const cloudinaryVideo = await uploadOnCloudinary(videoLocalPath)
-
-    if(!cloudinaryVideo) {
-        throw new ApiError(400,"Failed to upload video on CLoudinary")
-    }
-
-    console.log(`cloudinaryVideo details :${JSON.stringify(cloudinaryVideo.duration)}`);
-
-    const video = await Video.create({
-        videoFile: cloudinaryVideo.url,
-        title,
-        description,
-        thumbnail,
-        owner,
-        isPublished,
-        duration: cloudinaryVideo.duration
-    })
-
-    if(!video) {
-        throw new ApiError(400, "Failed to save video in database")
+    if(!video.length) {
+        throw new ApiError(404, "Video is not present in DB")
     }
 
     return res
     .status(200)
-    .json(new ApiResponse(200, video, "Video saved succesfully"))
+    .json(new ApiResponse(200, video, "Succesfully fetched data"))
+
 })
 
-const fetchSingleVideo = asyncHandler(async (req, res) => {
-    const { videoTitle } = req?.params
+const updateVideo = asyncHandler(async (req, res) => {
+    const { videoId } = req.params
+    //TODO: update video details like title, description, thumbnail
 
-    // if(!req?.user) {
-    //     throw new ApiError(400, "User is not logged In")
-    // }
-
-    if(!videoTitle) {
-        throw new ApiError(400, "Video Title is not provided in Url")
-    }
-
-    const video = await Video.findOne({
-        title: videoTitle
-    })
-
-    if(!video) {
-        throw new ApiError(400, "No Video present with given title")
-    }
-
-    return res
-    .status(200)
-    .json(new ApiResponse(200, video, "Video Has been succesfully fetched"))
 })
 
-/* Problem: Fetch the videos that belong to same channels
-1. fetch user._id from request
-2. make db query where match userId with owner id 
-3. send whole response
-*/
-
-const fetchchannelVideos = asyncHandler(async (req, res) => {
-    const { channelName } = req?.params
-    if(!channelName) {
-        throw new ApiError(400, "ChannelName is not available in url")
-    }
-
-    const channel = await User.findOne({
-        username: channelName
-    })
-
-    const videos = await Video.find({
-        owner: channel._id
-    })
-
-    return res
-    .status(200)
-    .json(new ApiResponse(200, videos, "All videos has been succesfully fetched"))
+const deleteVideo = asyncHandler(async (req, res) => {
+    const { videoId } = req.params
+    //TODO: delete video
 })
 
-export {registerVideo, fetchSingleVideo, fetchchannelVideos}
+const togglePublishStatus = asyncHandler(async (req, res) => {
+    const { videoId } = req.params
+})
+
+export {
+    getAllVideos,
+    publishAVideo,
+    getVideoById,
+    updateVideo,
+    deleteVideo,
+    togglePublishStatus
+}

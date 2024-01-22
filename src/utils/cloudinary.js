@@ -15,8 +15,6 @@ const uploadOnCloudinary = async function(localFilePath) {
         const response = await cloudinary.uploader.upload
         (localFilePath,{ 
             resource_type: "auto" });
-        console.log(localFilePath);
-        // console.log("File Uploaded Successfully ", response);
         await fs.unlink(localFilePath, (error) => {
             if(error) {
                 throw new ApiError(400, `Failed to delete local file after uploading ERROR:${error}`)
