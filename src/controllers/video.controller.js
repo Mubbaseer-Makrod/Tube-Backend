@@ -4,7 +4,7 @@ import {User} from "../models/user.model.js"
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
-import {uploadOnCloudinary} from "../utils/cloudinary.js"
+import {destroyOnCloudinary, uploadOnCloudinary} from "../utils/cloudinary.js"
 
 
 const getAllVideos = asyncHandler(async (req, res) => {
@@ -92,6 +92,7 @@ const getVideoById = asyncHandler(async (req, res) => {
                             username: 1,
                             avatar: 1,
                             coverImage: 1,
+                            _id: 1
                         }
                     }
                 ]
@@ -102,6 +103,13 @@ const getVideoById = asyncHandler(async (req, res) => {
     if(!video.length) {
         throw new ApiError(404, "Video is not present in DB")
     }
+ 
+    // Private video: Only publishing to authenticated user
+    if(!video[0].isPublished) {
+        if(!video[0].owner?.[0]._id?.equals(req?.user?._id)) {
+            throw new ApiError(400, "This video is private and you do not have permission to view it.")
+        }
+    }
 
     return res
     .status(200)
@@ -109,10 +117,86 @@ const getVideoById = asyncHandler(async (req, res) => {
 
 })
 
+/* Problem: Update Video Info (Title, description, thumbnail) (Input)
+1. check if user is login 
+2. fetch videoId from params and data from body and thumbnail from files
+3. create empty objecy toUpdate and add data to be update init.
+4. save to toUpdate object to the database.
+
+*/
 const updateVideo = asyncHandler(async (req, res) => {
     const { videoId } = req.params
     //TODO: update video details like title, description, thumbnail
+    const {title, description} = req.body
+    const thumbnailLocalPath = req?.file?.path
+    const toUpdate = {}
+    let oldThumbnailUrl
 
+    try {
+        if(!req?.user?._id) {
+            throw new ApiError(400, "User is not logged In")
+        }
+    
+        if(!videoId) {
+            throw new ApiError(400, "Video Id is not provided in Url")
+        }
+    
+        // adding info in toUpdate object
+        if(title) {
+            toUpdate.title = title
+        }
+        if(description) {
+            toUpdate.description = description
+        }
+        if(thumbnailLocalPath) {
+            // fetching old thumbnail
+            const video = await Video.findOne({
+                _id: videoId,
+                owner: req?.user?._id
+            })
+
+            if(!video) {
+                throw new ApiError(400, "Video not present in DB")
+            }
+            oldThumbnailUrl = video.thumbnail
+
+            // uploading thumbnail to cloudinary
+
+            const uploadedThumbnail = await uploadOnCloudinary(thumbnailLocalPath)
+
+            if(!uploadedThumbnail) {
+                throw new ApiError(400, "Failed to Upload thumbnail on cloudinary")
+            }
+            console.log(uploadedThumbnail);
+            toUpdate.thumbnail = uploadedThumbnail.url
+        }
+    
+        if(!Object.keys(toUpdate).length) {
+            throw new ApiError(400, "No data provided")
+        }
+        console.log(toUpdate);
+        const video = await Video.findOneAndUpdate(
+            {
+                _id: videoId,
+                owner: req?.user?._id
+            },
+            {
+                ...toUpdate,
+            }, { new: true }
+        )
+    
+        if(!video) {
+            throw new ApiError(400, "No Video Found")
+        }
+        // console.log(`video data is :${video}` );
+        await destroyOnCloudinary(oldThumbnailUrl)
+    
+        return res
+        .status(200)
+        .json(new ApiResponse(200, video, "Successfully Updated the data"))
+    } catch (error) {
+        throw new ApiError(400, `Error occour while updating Video: ${error}`)
+    }
 })
 
 const deleteVideo = asyncHandler(async (req, res) => {
