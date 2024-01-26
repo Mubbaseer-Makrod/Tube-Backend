@@ -1,90 +1,99 @@
-// import { Subscription } from "../models/subscription.model.js";
-// import { User } from "../models/user.model.js";
-// import { ApiError } from "../utils/ApiError.js";
-// import { ApiResponse } from "../utils/ApiResponce.js";
-// import { asyncHandler } from "../utils/asyncHandler.js";
-
-
-// /* problem: subscribe user to channel (if already subscribe make it unsubscribe)
-// 1. fetch channelname from params and userId from req
-// 2. Find channelId from db through channelname
-// 3. use user aggregated pipeline to find subscribe is already suscribed or not
-// 4. if present make to user unsubscribed (return Unsubscribed)
-// 5. if Not make the user subscribed
-// 6. return the sunscription.
-// */
-// const channelSubscription = asyncHandler(async(req, res) => {
-//     try {
-//         const { channelName } = req?.params
-//         console.log(channelName)
-//         console.log(req?.user._id)
-    
-//         const channel = await User.findOne({
-//             username: channelName
-//         })
-//         console.log(channel._id)
-    
-//         if(!channelName?.trim()) {
-//             throw new ApiError(400, "Channel is not given in url")
-//         }
-    
-//         if(!channel) {
-//             throw new ApiError(400, "Channel is not present, wrong channel name in Url")
-//         }
-    
-//         const subscription = await Subscription.findOne({
-//             channel: channel._id,
-//             subscriber: req?.user?._id 
-//         })
-    
-//         if (!subscription) {
-//             console.log("!subscription");
-//             const  newSubscription = await Subscription.create({
-//                 channel: channel._id,
-//                 subscriber: req?.user?._id
-//             })
-    
-//             if(!newSubscription) {
-//                 throw new ApiError(400, "Failed to save new Subscription to database")
-//             }
-    
-//             return res.status(200).json(new ApiResponse(200, newSubscription, "User Subscribed Successfully"))
-//         }
-//         console.log("Subscription");
-//         const deleteSubscription = await Subscription.deleteOne({
-//             channel: channel._id,
-//             subscriber: req?.user?._id
-//         })
-//         console.log("delete Subscription Successfull");
-//         if(!deleteSubscription.deletedCount) {
-//             throw new ApiError(400, deleteSubscription.deletedCount, "Failed to delete the Subscription in database")
-//         }
-    
-//         return res.status(200).json(new ApiResponse(200, deleteSubscription.deletedCount, "User has been unSubscribed"))
-//     } catch (error) {
-//         throw new ApiError(400, "Error while subscribing")
-//     }
-    
-// })
-
-// export {channelSubscription}
-
+import { Subscription } from "../models/subscription.model.js"
+import { ApiError } from "../utils/ApiError.js"
+import { ApiResponse } from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
 
-
+/* Problem: Toggle the subscription
+1. fetch channel Id and userId
+2. search subscription table for channelId and userId
+3. if not found create a new subscription, send res 
+4. if not then delete the old subscription, send res 
+*/
 const toggleSubscription = asyncHandler(async (req, res) => {
     const {channelId} = req.params
     // TODO: toggle subscription
+    if(!channelId) {
+        throw new ApiError(400, "ChannelId is not provided")
+    }
+
+    if(!req?.user?._id) {
+        throw new ApiError(400, "User is not logged In")
+    }
+
+    const oldSubscription = await Subscription.findOne({
+        channel: channelId,
+        subscriber: req?.user?._id
+    })
+
+    // create a new Subscription and send res
+    if(!oldSubscription) {
+        // create a new Subscription and send res
+        const newSubscription = await Subscription.create({
+            channel: channelId,
+            subscriber: req?.user?._id
+        })
+
+        if (!newSubscription) {
+            throw new ApiError(400, "Failed to create  a New Subscription")
+        }
+
+        return res
+        .status(200)
+        .json(new ApiResponse(200, newSubscription, "Subscribed Succesfully"))
+    }
+
+    // delete the old subscriptin and send res
+    const deleteSubscription = await Subscription.deleteOne({
+        channel: channelId,
+        subscriber: req?.user?._id
+    })
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, deleteSubscription, "UnSubscribed Succesfully"))
 })
 
 // controller to return subscriber list of a channel
+/*
+1. get channelId from params
+2. search Subscription table with channel Id and select "-channel"
+3. return the response
+ */
 const getUserChannelSubscribers = asyncHandler(async (req, res) => {
-    const {channelId} = req.params
+    const {subscriberId} = req.params
+
+    if(!subscriberId) {
+        throw new ApiError(400, "No channel Id present in params")
+    }
+
+    const subscriberList = await Subscription.find({
+        channel: subscriberId
+    }).select("-channel")
+
+    console.log(subscriberList);
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, subscriberList, "Succesfully fetched the subscriber"))
 })
 
 // controller to return channel list to which user has subscribed
 const getSubscribedChannels = asyncHandler(async (req, res) => {
-    const { subscriberId } = req.params
+    const { channelId } = req.params
+    console.log(req.params);
+
+    if(!channelId) {
+        throw new ApiError(400, "No subscriber Id present in params")
+    }
+
+    const channelList = await Subscription.find({
+        subscriber: channelId
+    }).select("-subscriber")
+
+    console.log(channelList);
+    return res
+    .status(200)
+    .json(new ApiResponse(200, channelList, "Succesfully fetched the subscriber"))
 })
 
 export {

@@ -199,13 +199,68 @@ const updateVideo = asyncHandler(async (req, res) => {
     }
 })
 
+/*Problem: Delete A single Video */
 const deleteVideo = asyncHandler(async (req, res) => {
     const { videoId } = req.params
     //TODO: delete video
+    if(!req?.user?._id) {
+        throw new ApiError(400, "User is not Logged In")
+    }
+
+    if(!videoId) {
+        throw new ApiError(400, "Failed to fetch Video from url")
+    }
+
+    const deletedVideo = await Video.deleteOne({
+        _id: videoId,
+        owner: req?.user?._id
+    })
+    if(deletedVideo.deletedCount === 0) {
+        throw new ApiError(400, "Video not found")
+    }
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, deletedVideo, "Successfully deleted video"))
 })
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
     const { videoId } = req.params
+    
+    if(!req?.user?._id) {
+        throw new ApiError(400, "User is not logged In")
+    }
+
+    if(!videoId) {
+        throw new ApiError(400, "Video Id is not given in url")
+    }
+
+    const currentPublishStatus = await Video.findOne({
+        _id: videoId,
+        owner: req?.user?._id
+    }).select("isPublished")
+
+    if(!currentPublishStatus.isPublished) {
+        throw new ApiError(400, "No Video found")
+    }
+    
+    const videotoggleStatus = await Video.findOneAndUpdate({
+        _id: videoId,
+        owner: req?.user?._id
+    }, 
+    {
+        $set: {
+            isPublished: !currentPublishStatus.isPublished
+        }
+    }, { new: true })
+
+    if(!videotoggleStatus) {
+        throw new ApiError(400, "Failed to toggle the status of video")
+    }
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, videotoggleStatus, "Toggle publish successfully"))
 })
 
 export {
