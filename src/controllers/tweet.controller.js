@@ -13,7 +13,7 @@ const createTweet = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Please Provide content")
     }
 
-    if(!req?.user?._d) {
+    if(!req?.user?._id) {
         throw new ApiError(400, "User Must be Login")
     }
 
@@ -94,7 +94,7 @@ const deleteTweet = asyncHandler(async (req, res) => {
         owner: req?.user?._id
     })
 
-    if(!deletedTweet) {
+    if(deletedTweet.deletedCount === 0) {
         throw new ApiError(404, "Unauthorized acess either videid or owner is wrong")
     }
 

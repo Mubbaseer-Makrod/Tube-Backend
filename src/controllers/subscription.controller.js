@@ -48,6 +48,10 @@ const toggleSubscription = asyncHandler(async (req, res) => {
         subscriber: req?.user?._id
     })
 
+    if(deleteSubscription.deletedCount === 0) {
+        throw new ApiError(404, "Failed to delete the subscription")
+    }
+
     return res
     .status(200)
     .json(new ApiResponse(200, deleteSubscription, "UnSubscribed Succesfully"))
